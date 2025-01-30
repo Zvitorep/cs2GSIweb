@@ -1,0 +1,377 @@
+<!-- cSpell:disable -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSGO HUD</title>
+    <style>
+        @font-face {
+            font-family: "csgo_icons";
+            src: url("csgo_icons.ttf");
+        }
+
+        body {
+            background-color: black;
+            color: white;
+            font-family: "Fira Mono", monospace;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .hud {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .top-info {
+            z-index: 1;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 2% 4%;
+            box-sizing: border-box;
+        }
+
+        .info {
+            text-align: left;
+            font-size: 2vh;
+        }
+
+        .profile-pic {
+            width: 15vh;
+            height: 15vh;
+            border-radius: 25%;
+            border: 2px solid white;
+            image-rendering: crisp-edges;
+        }
+
+        .scoreboard {
+            font-size: 4vh;
+            margin-top: 1%;
+            text-align: center;
+        }
+
+        .timer {
+            font-size: 15vh;
+            color: white;
+            margin: 2% 0;
+            text-align: center;
+        }
+
+        .teamUtility {
+            width: 10vh;
+            height: 10vh;
+            font-size: 10vh;
+            margin-top: 1%;
+            color: #d4ad00;
+            font-family: "csgo_icons";
+        }
+
+        .health-armor,
+        .score {
+            width: 100%;
+            font-size: 2.5vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 2%;
+        }
+
+        .health-armor {
+            font-size: 3vh;
+        }
+
+        .bar-container {
+            width: 60%;
+            display: flex;
+            align-items: center;
+            margin: 1% 0;
+        }
+
+        .bar {
+            flex: 1;
+            height: 3vh;
+            background-color: gray;
+            margin-left: 1vw;
+            position: relative;
+            border-radius: 1.1vh;
+        }
+
+        .bar-inner {
+            height: 100%;
+            background-color: green;
+            width: 100%;
+            border-radius: 1.1vh;
+            /* Initially set to 100%, updated dynamically */
+        }
+
+        .change-username {
+            padding: 1.5% 3%;
+            font-size: 2vw;
+            cursor: pointer;
+            background-color: white;
+            color: black;
+            border: none;
+            margin-bottom: 20%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="hud">
+        <!-- Top Information Block -->
+        <div class="top-info">
+            <div class="info" id="info">
+                Name: <span id="username">Unknown</span><br>
+                Map: <span id="mapName">Unknown</span><br>
+                Helmet: <span id="helmet">false</span><br>
+                <!-- Defuser: <span id="defuser">false</span><br> -->
+                Bomb: <span id="bombStatus">Not planted</span>
+            </div>
+            <img src="profile.png" class="profile-pic" id="profilePic" alt="Profile Picture">
+        </div>
+
+        <!-- Scoreboard and Timer Block -->
+        <div style="z-index: 10;">
+            <div class="scoreboard" id="scoreboard">
+                <span id="ctScore" style="color: #5ab8f4">0 CT</span> | <span id="tScore" style="color: #f0c941">T 0</span>
+            </div>
+            <span class="timer"><span>&#x2063;</span><span id="timer">00</span><span class="teamUtility" id="teamUtilityIcon"></span></span>
+            <!-- <img src="pliers.png" class="pliers" id="pliersIcon" alt="Defuse Kit"> -->
+        </div>
+
+        <!-- Health & Armor and Player Score Block -->
+        <div class="health-armor" style="z-index: 3;">
+            <div class="bar-container">
+                <div>✙ <span id="health">100</span></div>
+                <div class="bar">
+                    <div class="bar-inner" id="healthBar"></div>
+                </div>
+            </div>
+            <div class="bar-container">
+                <div><span id="armoricon" style="font-family: csgo_icons;"> </span><span id="armor">100</span></div>
+                <div class="bar">
+                    <div class="bar-inner" id="armorBar"></div>
+                </div>
+            </div>
+        </div>
+
+        <span class="score" style="flex-direction: row; gap: 1ch; z-index: 2; display: inline-block; width: unset;">K:<span id="kills">0</span> | A:<span id="assists">0</span> | D:<span id="deaths">0</span> | ⭐:<span id="mvp">0</span> | 📊:<span id="gameScore">0</span>
+        </span>
+
+        <!-- Change Username Button -->
+        <button class="change-username" onclick="changeUsername()">Change Username</button>
+    </div>
+    
+    <script>
+        let timerInterval;
+        // Helper functions for cookie management
+        function setCookie(name, value, days) {
+            let date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            let expires = "expires=" + date.toUTCString();
+            document.cookie = name + "=" + value + ";" + expires + ";path=/";
+        };
+
+        function getCookie(name) {
+            let decodedCookie = decodeURIComponent(document.cookie);
+            let cookies = decodedCookie.split(';');
+            name = name + "=";
+            for (let i = 0; i < cookies.length; i++) {
+                let cookie = cookies[i].trim();
+                if (cookie.indexOf(name) == 0) {
+                    return cookie.substring(name.length, cookie.length);
+                }
+            }
+            return "";
+        };
+
+        // Function to prompt the user for their username
+        function promptUsername() {
+            let username = getCookie("gsi_personaname");
+            if (username == "") {
+                username = prompt("Please enter your username:");
+                if (username != "" && username != null) {
+                    setCookie("gsi_personaname", username, 30);
+                }
+            }
+            document.getElementById("username").innerText = username;
+        };
+
+        // Function to change username using a button
+        function changeUsername() {
+            let username = prompt("Please enter your new username:");
+            if (username != "" && username != null) {
+                setCookie("gsi_personaname", username, 30);
+                document.getElementById("username").innerText = username;
+                window.location.reload();
+            };
+        };
+
+
+        function setScore(ct, t) {
+            document.getElementById("ctScore").innerText = ct + " CT";
+            document.getElementById("tScore").innerText = "T " + t;
+        };
+
+        function setTimerValue(value) {
+            document.getElementById("timer").innerText = value;
+        };
+
+        function setTimerColor(color) {
+            document.getElementById("timer").style.color = color;
+        };
+
+        function setTeamUtility(hasTeamUtility, playerTeam) {
+            const teamUtilityElement = document.getElementById("teamUtilityIcon");
+            teamUtilityElement.innerText = (playerTeam === "CT") ? "" : "";
+            // document.getElementById("defuser").innerText = hasDefuse ? "true" : "false";
+            teamUtilityElement.style.display = hasTeamUtility ? "inline" : "none";
+        };
+
+        function setArmorHealth(health, armor, helmet) {
+            document.getElementById("health").innerText = health;
+            document.getElementById("armor").innerText = armor;
+            document.getElementById("armoricon").innerText = (helmet ? "" : "") + " ";
+            document.getElementById("helmet").innerText = helmet ? "true" : "false";
+            updateBars();
+        };
+
+        function updateBars() {
+            const health = parseInt(document.getElementById("health").innerText);
+            const armor = parseInt(document.getElementById("armor").innerText);
+            const healthBar = document.getElementById("healthBar");
+            const armorBar = document.getElementById("armorBar");
+
+            healthBar.style.width = health + "%";
+            armorBar.style.width = armor + "%";
+
+            healthBar.style.backgroundColor = health > 50 ? '#50c550' : (health > 20 ? 'yellow' : 'red');
+            armorBar.style.backgroundColor = armor > 50 ? '#4343e6' : (armor > 20 ? 'yellow' : 'red');
+        };
+
+        function setPlayerScore(kills, assists, deaths, mvps, score) {
+            document.getElementById("kills").innerText = kills;
+            document.getElementById("assists").innerText = assists;
+            document.getElementById("deaths").innerText = deaths;
+            document.getElementById("mvp").innerText = mvps;
+            document.getElementById("gameScore").innerText = score;
+        };
+
+        function startTimer(duration) {
+            let timer = duration;
+            const timerElement = document.getElementById("timer");
+            const bombStatText = document.getElementById("bombStatus");
+            bombStatText.innerText = "! Planted !";
+            timerElement.innerText = "40";
+            timerInterval = setInterval(function () {
+                timerElement.innerText = timer;
+                if (timer <= 0) {
+                    clearInterval(timerInterval);
+                    timerElement.innerText = "00";
+                } else {
+                    if (timer <= 8) {
+                        timerElement.style.color = "#ff0000";
+                    }
+                    else if (timer <= 13) {
+                        timerElement.style.color = "#ffa726";
+                    };
+                    timer--;
+                };
+            }, 1000);
+        };
+
+        function stopTimer() {
+            document.getElementById("bombStatus").innerText = "Not planted";
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                document.getElementById("timer").innerText = "00";
+            }
+        };
+
+
+        // On page load, prompt for username or use saved one
+        window.onload = function () {
+            promptUsername();
+            updateBars();
+            const avatarElement = document.getElementById("profilePic");
+            var previousBombState = "unknown";
+            var pfpNotChanged = true;
+            const socket = new WebSocket("./wsp"); //cSpell: disable-line
+            // Handle WebSocket connection open event
+            socket.onopen = function () {
+                socket.send('{"client":"'+window.navigator.userAgent+'","gsi_personaname":"'+getCookie("gsi_personaname")+'"}');
+                console.log("WebSocket connection established");
+            };
+            socket.onmessage = function (event) {
+                const data = JSON.parse(event.data);
+                const providerID = data.provider.steamid;
+                try {
+                    var currentPlayerID = data.player.steamid || 404;
+                }
+                catch {
+                    var currentPlayerID = 404;
+                };
+                try {
+                    var bombState = data.round.bomb || "unknown";
+                }
+                catch {
+                    var bombState = previousBombState;
+                };
+
+                if (pfpNotChanged) { // default picture check
+                    avatarElement.src = `avatar/${providerID}.jpg`;
+                    pfpNotChanged = false;
+                } 
+
+                // do stuff here
+                if (bombState != previousBombState) {
+                    if (bombState == "planted") {
+                        startTimer(39);
+                    }
+                    else {
+                        stopTimer();
+                        setTimerColor("unset");
+                    };
+                    previousBombState = bombState;
+                };
+
+                if (currentPlayerID == providerID){
+                    try {
+                        const matchStats = data.player.match_stats;
+                        setPlayerScore(matchStats.kills, matchStats.assists, matchStats.deaths, matchStats.mvps, matchStats.score);
+                    }
+                    catch {};
+                    try {
+                        setTeamUtility(data.player.state.defusekit || Object.values(data.player.weapons).some(weapon => weapon.name === "weapon_c4"), data.player.team);
+                    }
+                    catch {};
+                    try {
+                        setArmorHealth(data.player.state.health || 0, data.player.state.armor || 0, data.player.state.helmet || false);
+                    }
+                    catch {};
+                    try {
+                        setScore(data.map.team_ct.score, data.map.team_t.score);
+                        document.getElementById("mapName").innerText = data.map.name;
+                    }
+                    catch {};
+                };
+                
+            };
+            
+        
+        };
+    </script>
+</body>
+
+</html>
