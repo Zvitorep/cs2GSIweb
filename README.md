@@ -16,9 +16,6 @@
 
 > A feature-rich CS2 GSI web frontend and bomb timer
 
-A longer description of your project goes here...
-
-
 <!-- pyscaffold-notes -->
 
 ## Note
