@@ -21,6 +21,7 @@ import os
 # import sys
 # import threading
 import time
+
 # import hashlib
 from collections import defaultdict
 from io import BytesIO
@@ -65,19 +66,7 @@ class TerminalColors:
         return color_code
 
     def print_ctext(self, _text, color="#964bb4"):
-        # color_code = self.terminalpaint(color)
-        # _str_io_buf = StringIO()
-        # pprint.pprint(object=_text, stream=_str_io_buf)
-        # _raw_pp_str = _str_io_buf.getvalue()
-        # del _str_io_buf
         _raw_pp_str = str(_text)  # pprint.pformat(object=_text)
-        # _raw_pp_str = _raw_pp_str.strip()
-        # if _raw_pp_str:
-        #     if _raw_pp_str.endswith("'"):
-        #         _raw_pp_str = _raw_pp_str.strip("'")
-        #     elif _raw_pp_str.endswith('"'):
-        #         _raw_pp_str = _raw_pp_str.strip('"')
-
         print(f"{self.terminalpaint(color)}{_raw_pp_str}{self.ENDC}")
 
 
@@ -90,20 +79,18 @@ app = Flask(SERVER_NAME, static_folder="static", static_url_path="")
 app.config["SOCK_SERVER_OPTIONS"] = {"ping_interval": 10}
 wsock = FlaskWSocket(app)
 
-# ws_client_list: list[Server] = []
-# payload_queue = []
 clients_map: dict[str, list[Server]] = defaultdict(list)
+
+
+def _no_cache_steamid_json_provider(_steamid: str) -> dict:
+    print(f"Accesing data for {_steamid}...")
+    return requests.get(f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={SPEC_SKEY}&steamids={_steamid}").json()
 
 
 @functools.cache
 def _steamid_json_provider(_steamid: str) -> dict:
     print(f"Adding {_steamid} JSON to cache...")
     return _no_cache_steamid_json_provider(_steamid)
-
-
-def _no_cache_steamid_json_provider(_steamid: str) -> dict:
-    print(f"Accesing data for {_steamid}...")
-    return requests.get(f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={SPEC_SKEY}&steamids={_steamid}").json()
 
 
 @functools.cache
@@ -142,8 +129,6 @@ def _file_age(_filepath: str) -> float:
 
 @app.route("/gamestate", methods=["POST"])
 def GSI_post():
-    # Get the image link from the request parameters
-    # print(request.headers)
     _payload: dict = request.json
     pprint(_payload)
 
@@ -163,14 +148,17 @@ def GSI_post():
 def wsock_frontend_com(ws: Server):
 
     tc.print_ctext(f"[WS] New websocket connection! - {request.user_agent.string}", color="#3dfa4d")
+    persona_name = request.cookies.get("gsi_personaname")
 
     @after_this_request
     def _nuke_ws_client(_ws_resp_ctx):
-        clients_map[(request.cookies.get("gsi_personaname"))].remove(ws)
+        clients_map[persona_name].remove(ws)
+        if not clients_map[persona_name]:
+            clients_map.pop(persona_name)
         tc.print_ctext(f"[WS] {request.user_agent.string} Disconnected!", color="#ff4444")
         return _ws_resp_ctx
 
-    clients_map[request.cookies.get("gsi_personaname")].append(ws)
+    clients_map[persona_name].append(ws)
     while True:
         data = ws.receive(None)
         if data:
